@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { GitBranch, User, Trash2 } from 'lucide-react';
+import React, { useState } from "react";
+import { GitBranch, User, Trash2 } from "lucide-react";
 
 interface SidebarProps {
   repositories: string[];
@@ -20,22 +20,22 @@ export function Sidebar({
   onSelectRepos,
   onSelectUsers,
   onSelectRepo,
-  onDeleteUser
+  onDeleteUser,
 }: SidebarProps) {
-  const [repoSearchTerm, setRepoSearchTerm] = useState('');
-  const [userSearchTerm, setUserSearchTerm] = useState('');
+  const [repoSearchTerm, setRepoSearchTerm] = useState("");
+  const [userSearchTerm, setUserSearchTerm] = useState("");
 
-  const filteredRepositories = repositories.filter(repo =>
-    repo.toLowerCase().includes(repoSearchTerm.toLowerCase())
+  const filteredRepositories = repositories.filter((repo) =>
+    repo.toLowerCase().includes(repoSearchTerm.toLowerCase()),
   );
 
-  const filteredUsers = users.filter(user =>
-    user.toLowerCase().includes(userSearchTerm.toLowerCase())
+  const filteredUsers = users.filter((user) =>
+    user.toLowerCase().includes(userSearchTerm.toLowerCase()),
   );
 
   const handleRepoCheckboxChange = (repo: string) => {
     if (selectedRepos.includes(repo)) {
-      onSelectRepos(selectedRepos.filter(r => r !== repo));
+      onSelectRepos(selectedRepos.filter((r) => r !== repo));
     } else {
       onSelectRepos([...selectedRepos, repo]);
     }
@@ -43,7 +43,7 @@ export function Sidebar({
 
   const handleUserCheckboxChange = (user: string) => {
     if (selectedUsers.includes(user)) {
-      onSelectUsers(selectedUsers.filter(u => u !== user));
+      onSelectUsers(selectedUsers.filter((u) => u !== user));
     } else {
       onSelectUsers([...selectedUsers, user]);
     }
@@ -71,11 +71,11 @@ export function Sidebar({
       <div className="overflow-y-auto flex-1">
         <div className="p-2">
           <button
-            onClick={() => onSelectRepo('all')}
+            onClick={() => onSelectRepo("all")}
             className={`w-full text-left px-4 py-2 rounded-lg mb-1 ${
               selectedRepos.length === 0
-                ? 'bg-blue-50 text-blue-600'
-                : 'hover:bg-gray-50'
+                ? "bg-blue-50 text-blue-600"
+                : "hover:bg-gray-50"
             }`}
           >
             All Repositories
@@ -118,7 +118,10 @@ export function Sidebar({
             <p className="text-sm text-gray-500 px-4">No users found</p>
           ) : (
             filteredUsers.map((user) => (
-              <div key={user} className="flex items-center justify-between w-full mb-1 px-4">
+              <div
+                key={user}
+                className="flex items-center justify-between w-full mb-1 px-4"
+              >
                 <label className="flex items-center">
                   <input
                     type="checkbox"
@@ -130,8 +133,9 @@ export function Sidebar({
                   <span className="text-sm">{user}</span>
                 </label>
                 <button
+                  type="button"
                   onClick={() => handleDeleteUserClick(user)}
-                  className="text-red-500 hover:text-red-700 focus:outline-none"
+                  className="text-red-500 hover:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500"
                   title={`Delete ${user}`}
                 >
                   <Trash2 className="w-4 h-4" />

@@ -7,6 +7,7 @@ interface UserStats {
   commits: number;
   pullRequests: number;
   reviews: number;
+  issues: number; // ✅ FIX ADDED
 }
 
 interface UserActivityStatsProps {
@@ -22,6 +23,7 @@ export function UserActivityStats({ activities }: UserActivityStatsProps) {
         commits: 0,
         pullRequests: 0,
         reviews: 0,
+        issues: 0, // ✅ FIX ADDED
       };
     }
 
@@ -35,6 +37,9 @@ export function UserActivityStats({ activities }: UserActivityStatsProps) {
       case 'review':
         acc[activity.author].reviews++;
         break;
+      case 'issue': // ✅ FIX ADDED
+        acc[activity.author].issues++;
+        break;
     }
 
     return acc;
@@ -42,8 +47,8 @@ export function UserActivityStats({ activities }: UserActivityStatsProps) {
 
   
   const sortedUsers = Object.values(userStats).sort((a, b) => {
-    const totalA = a.commits + a.pullRequests + a.reviews;
-    const totalB = b.commits + b.pullRequests + b.reviews;
+    const totalA = a.commits + a.pullRequests + a.reviews + a.issues; // ✅ FIX UPDATED
+    const totalB = b.commits + b.pullRequests + b.reviews + b.issues; // ✅ FIX UPDATED
     return totalB - totalA;
   });
 

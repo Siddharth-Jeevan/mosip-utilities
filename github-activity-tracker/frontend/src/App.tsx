@@ -1,90 +1,47 @@
 import { useState, useEffect } from "react";
+import { Routes, Route, Navigate, useNavigate, useLocation, useParams } from "react-router-dom";
 
 import { StatsCard } from "./components/StatsCard";
 import ActivityChart from "./components/ActivityChart";
-import DetailView from "./components/DetailView";
 import TopNav from "./components/TopNav";
 import TeamMembers from "./components/TeamMembers";
 import LeaderboardCard from "./components/LeaderboardCard";
-import UserProfile from "./components/UserProfile";   
+import UserProfile from "./components/UserProfile";
 
-import { useGitHubActivity } from "./lib/hooks";
-import { fetchUsers } from "./lib/api";
+import {
+  fetchUsers,
+  fetchOrgSummary,
+  fetchOrgActivity,
+  fetchLeaderboard,
+} from "./lib/api";
 
-import type { ActivityItem } from "./lib/database.types";
-
-import { GitCommit, GitPullRequest, MessageSquare } from "lucide-react";
-
-const userTeamMap: Record<string, string> = {
-  "Alice Johnson": "Frontend",
-  "Bob Smith": "Backend",
-  "Carol Williams": "Frontend",
-  "David Brown": "Backend",
-  "Emma Davis": "DevOps",
-  "Frank Miller": "Frontend",
-  "Grace Lee": "Backend",
-  "Henry Wilson": "DevOps",
-};
-
-const userProjectMap: Record<string, string> = {
-  "Alice Johnson": "Alpha",
-  "Bob Smith": "Alpha",
-  "Carol Williams": "Beta",
-  "David Brown": "Beta",
-  "Emma Davis": "Alpha",
-  "Frank Miller": "Gamma",
-  "Grace Lee": "Gamma",
-  "Henry Wilson": "Beta",
-};
+import CommitIcon from "./assets/CommitIcon.svg";
+import PRIcon from "./assets/PRIcon.svg";
+import CodeReviewIcon from "./assets/CodeReviewIcon.svg";
+import TotalActivityIcon from "./assets/TotalActivityIcon.svg";
 
 function App() {
-  const [activePage, setActivePage] = useState<
-    "dashboard" | "leaderboard" | "profile"
-  >("dashboard");
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  const [selectedUser, setSelectedUser] = useState<string | null>(null);
+  const activePage = location.pathname.includes("leaderboard")
+    ? "leaderboard"
+    : "dashboard";
 
-  const [selectedRepo] = useState<string>("all");
-  const [startDate] = useState<string>("");
-  const [endDate] = useState<string>("");
-  const [dateRange] = useState<string>("all");
-  const [shouldFetchData] = useState<boolean>(false);
+  const [period, setPeriod] = useState<"daily" | "weekly" | "monthly">("daily");
 
   const [users, setUsers] = useState<string[]>([]);
-  const [selectedRepos] = useState<string[]>([]);
-  const [selectedUsers] = useState<string[]>([]);
-  const [currentUsername] = useState<string>("");
+  const [summary, setSummary] = useState<any | null>(null);
+  const [activityChartData, setActivityChartData] = useState<any | null>(null);
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
 
-  const [displayedActivities, setDisplayedActivities] =
-    useState<ActivityItem[]>([]);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
 
-  const [filterType, setFilterType] = useState<
-    "all" | "commit" | "pull_request" | "review"
-  >("all");
-
-  const [showDetailView, setShowDetailView] = useState(false);
-  const [detailViewType, setDetailViewType] = useState<
-    "commit" | "pull_request" | "review" | null
-  >(null);
-  const [detailViewData, setDetailViewData] =
-    useState<ActivityItem[] | null>(null);
-
-  const [period, setPeriod] = useState<"daily" | "weekly" | "monthly">(
-    "weekly"
-  );
-  const [team, setTeam] = useState("all");
-  const [project, setProject] = useState("all");
-
-  const { activities, loading, error } = useGitHubActivity(
-    selectedRepo,
-    dateRange,
-    startDate,
-    endDate,
-    shouldFetchData,
-    currentUsername,
-    selectedRepos,
-    selectedUsers
-  );
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [activityError, setActivityError] = useState<string | null>(null);
+  const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadUsers() {
@@ -99,144 +56,158 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const enriched = activities.map((a) => ({
-      ...a,
-      team: userTeamMap[a.author] || "Unknown",
-      project: userProjectMap[a.author] || "Unknown",
-    }));
+    async function loadSummary() {
+      try {
+        setSummaryLoading(true);
+        setSummaryError(null);
+        const data = await fetchOrgSummary("mosip", period);
+        setSummary(data);
+      } catch {
+        setSummaryError("Failed to load summary");
+      } finally {
+        setSummaryLoading(false);
+      }
+    }
+    loadSummary();
+  }, [period]);
 
-    setDisplayedActivities(enriched);
-  }, [activities]);
+  useEffect(() => {
+    async function loadActivity() {
+      try {
+        setActivityLoading(true);
+        setActivityError(null);
+        const data = await fetchOrgActivity("mosip", period);
+        setActivityChartData(data);
+      } catch {
+        setActivityError("Failed to load activity");
+      } finally {
+        setActivityLoading(false);
+      }
+    }
+    loadActivity();
+  }, [period]);
 
-  const openPRCount = displayedActivities.filter(
-    (a) => a.type === "pull_request" && a.state === "OPEN"
-  ).length;
+  useEffect(() => {
+    async function loadLeaderboard() {
+      try {
+        setLeaderboardLoading(true);
+        setLeaderboardError(null);
 
-  const closedPRCount = displayedActivities.filter(
-    (a) => a.type === "pull_request" && a.state === "CLOSED"
-  ).length;
+        const data = await fetchLeaderboard("mosip", period, 10);
+        const list = Array.isArray(data) ? data : data?.leaderboard || [];
 
-  const reviewCount = displayedActivities.filter(
-    (a) => a.type === "review"
-  ).length;
+        setLeaderboard(
+          list.map((u: any) => ({
+            name: u.login,
+            team: "—",
+            project: "—",
+            commits: u.commits,
+            prs: u.prs,
+            reviews: u.reviews,
+            total: u.score,
+          }))
+        );
+      } catch {
+        setLeaderboardError("Failed to load leaderboard");
+      } finally {
+        setLeaderboardLoading(false);
+      }
+    }
+    loadLeaderboard();
+  }, [period]);
+
+  const isLoading =
+    summaryLoading || activityLoading || leaderboardLoading;
+
+  const error =
+    summaryError || activityError || leaderboardError;
 
   const handleSelectUser = (name: string) => {
-    setSelectedUser(name);
-    setActivePage("profile");
+    navigate(`/profile/${name}`);
   };
-
-  const handleCloseDetailView = () => {
-    setShowDetailView(false);
-    setDetailViewType(null);
-    setDetailViewData(null);
-  };
-
-  const filteredActivities = displayedActivities.filter((a) => {
-    const teamMatch =
-      team === "all" || a.team?.toLowerCase() === team.toLowerCase();
-
-    const projectMatch =
-      project === "all" || a.project?.toLowerCase() === project.toLowerCase();
-
-    return teamMatch && projectMatch;
-  });
 
   return (
     <div className="min-h-screen bg-gray-100">
-
-      {activePage !== "profile" && (
+      {!location.pathname.includes("/profile") && (
         <TopNav
           activePage={activePage}
-          onChange={setActivePage}
+          onChange={(page) => navigate(`/${page}`)}
           title="GitHub Activity Tracker"
           period={period}
           onPeriodChange={setPeriod}
-          team={team}
-          onTeamChange={setTeam}
-          project={project}
-          onProjectChange={setProject}
-          onDownloadCSV={() => console.log("CSV")}
-          onDownloadJSON={() => console.log("JSON")}
+          team="all"
+          onTeamChange={() => {}}
+          project="all"
+          onProjectChange={() => {}}
+          onDownloadCSV={() => {}}
+          onDownloadJSON={() => {}}
         />
       )}
 
-      {activePage === "profile" && selectedUser && (
-        <UserProfile
-          userName={selectedUser}
-          onBack={() => setActivePage("dashboard")}
-        />
-      )}
+      <Routes>
+        <Route
+          path="/dashboard"
+          element={
+            <main className="font-arimo max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              {isLoading && <p>Loading...</p>}
+              {error && <p className="text-red-500">{error}</p>}
 
-      
-      {activePage === "dashboard" && (
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {loading && <p>Loading...</p>}
-          {error && <p className="text-red-500">{error}</p>}
+              {!isLoading && !error && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
+                    <StatsCard title="Total Commits" value={summary?.total_commits ?? 0} change={summary?.change?.commits} icon={CommitIcon} />
+                    <StatsCard title="Pull Requests" value={summary?.total_prs ?? 0} change={summary?.change?.prs} icon={PRIcon} />
+                    <StatsCard title="Reviews" value={summary?.total_reviews ?? 0} change={summary?.change?.reviews} icon={CodeReviewIcon} />
+                    <StatsCard title="Total Activity" value={summary?.total_activity ?? 0} change={summary?.change?.activity} icon={TotalActivityIcon} />
+                  </div>
 
-          {!loading && !error && (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
-                <StatsCard
-                  title="Total Commits"
-                  value={
-                    filteredActivities.filter((a) => a.type === "commit").length
-                  }
-                  icon={GitCommit}
-                />
+                  <div className="bg-white border rounded-xl shadow-sm p-6 mb-8">
+                    <ActivityChart data={activityChartData} period={period} />
+                  </div>
 
-                <StatsCard
-                  title="Open Pull Requests"
-                  value={openPRCount}
-                  icon={GitPullRequest}
-                />
-
-                <StatsCard
-                  title="Closed Pull Requests"
-                  value={closedPRCount}
-                  icon={GitPullRequest}
-                />
-
-                <StatsCard
-                  title="Reviews"
-                  value={reviewCount}
-                  icon={MessageSquare}
-                />
-              </div>
-
-              <div className="bg-white border rounded-xl shadow-sm p-6 mb-8">
-                <ActivityChart
-                  activities={filteredActivities}
-                  period={period}
-                />
-              </div>
-
-              <TeamMembers
-                team={team}
-                project={project}
-                onSelectUser={handleSelectUser}
-              />
-
-              {showDetailView && (
-                <DetailView
-                  type={detailViewType}
-                  data={detailViewData}
-                  onClose={handleCloseDetailView}
-                />
+                  <TeamMembers
+                    team="all"
+                    project="all"
+                    period={period}
+                    onSelectUser={handleSelectUser}
+                  />
+                </>
               )}
-            </>
-          )}
-        </main>
-      )}
+            </main>
+          }
+        />
 
-      
-      {activePage === "leaderboard" && (
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <h1 className="text-3xl font-bold mb-6">Leaderboard</h1>
+        <Route
+          path="/leaderboard"
+          element={
+            <main className="font-arimo max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              <h1 className="text-3xl font-bold mb-6">Leaderboard</h1>
+              <LeaderboardCard leaders={leaderboard} />
+            </main>
+          }
+        />
 
-          <LeaderboardCard />
-        </main>
-      )}
+        <Route
+          path="/profile/:username"
+          element={<ProfilePage />}
+        />
+
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
     </div>
+  );
+}
+
+function ProfilePage() {
+  const { username } = useParams();
+
+  const navigate = useNavigate();
+
+  return (
+    <UserProfile
+      userName={username || ""}
+      onBack={() => navigate("/dashboard")}
+    />
   );
 }
 

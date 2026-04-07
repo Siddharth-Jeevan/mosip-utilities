@@ -1,215 +1,233 @@
-import React from "react";
-
-
-const teamData = [
-  {
-    name: "Alice Johnson",
-    email: "alice.johnson@company.com",
-    team: "Frontend",
-    project: "Alpha",
-    role: "Senior Developer",
-    commits: 95,
-    prs: 18,
-    reviews: 44,
-    diffCommits: +2,
-    diffPRs: -20,
-    diffReviews: -12,
-  },
-  {
-    name: "Bob Smith",
-    email: "bob.smith@company.com",
-    team: "Backend",
-    project: "Alpha",
-    role: "Tech Lead",
-    commits: 31,
-    prs: 15,
-    reviews: 32,
-    diffCommits: -34,
-    diffPRs: -3,
-    diffReviews: -7,
-  },
-  {
-    name: "Carol Williams",
-    email: "carol.williams@company.com",
-    team: "Frontend",
-    project: "Beta",
-    role: "Junior Developer",
-    commits: 32,
-    prs: 9,
-    reviews: 15,
-    diffCommits: -6,
-    diffPRs: 0,
-    diffReviews: -1,
-  },
-  {
-    name: "David Brown",
-    email: "david.brown@company.com",
-    team: "Backend",
-    project: "Beta",
-    role: "Senior Developer",
-    commits: 11,
-    prs: 4,
-    reviews: 9,
-    diffCommits: -6,
-    diffPRs: -2,
-    diffReviews: +4,
-  },
-  {
-    name: "Emma Davis",
-    email: "emma.davis@company.com",
-    team: "DevOps",
-    project: "Alpha",
-    role: "DevOps Engineer",
-    commits: 50,
-    prs: 18,
-    reviews: 31,
-    diffCommits: 0,
-    diffPRs: 0,
-    diffReviews: +5,
-  },
-  {
-    name: "Frank Miller",
-    email: "frank.miller@company.com",
-    team: "Frontend",
-    project: "Gamma",
-    role: "Developer",
-    commits: 45,
-    prs: 7,
-    reviews: 23,
-    diffCommits: -10,
-    diffPRs: -18,
-    diffReviews: 0,
-  },
-  {
-    name: "Grace Lee",
-    email: "grace.lee@company.com",
-    team: "Backend",
-    project: "Gamma",
-    role: "Architect",
-    commits: 60,
-    prs: 15,
-    reviews: 20,
-    diffCommits: -1,
-    diffPRs: +4,
-    diffReviews: -23,
-  },
-  {
-    name: "Henry Wilson",
-    email: "henry.wilson@company.com",
-    team: "DevOps",
-    project: "Beta",
-    role: "Senior DevOps Engineer",
-    commits: 9,
-    prs: 1,
-    reviews: 7,
-    diffCommits: -2,
-    diffPRs: -4,
-    diffReviews: +2,
-  },
-];
-
+import React, { useEffect, useState } from "react";
+import { fetchOrgUsers } from "../lib/api";
 
 const UserIcon = () => (
-  <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center font-bold text-white">
+  <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-2xl">
     👤
   </div>
 );
 
-
 interface TeamMembersProps {
   team: string;
   project: string;
+  period: "daily" | "weekly" | "monthly";
   onSelectUser?: (name: string) => void;
 }
+
+const getDiffColor = (diff: number) => {
+  if (diff > 0) return "#00A63E";
+  if (diff < 0) return "#E7000B";
+  return "#155DFC";
+};
 
 const TeamMembers: React.FC<TeamMembersProps> = ({
   team,
   project,
+  period,
   onSelectUser,
 }) => {
-  const filtered = teamData.filter((m) => {
-    const matchTeam =
-      team === "all" || m.team.toLowerCase() === team.toLowerCase();
-    const matchProject =
-      project === "all" || m.project.toLowerCase() === project.toLowerCase();
-    return matchTeam && matchProject;
-  });
+  const [members, setMembers] = useState<any[]>([]);
+
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
+  useEffect(() => {
+    async function loadUsers() {
+      try {
+        const data = await fetchOrgUsers("mosip", period, 1, 1000);
+
+        console.log("API RESPONSE:", data);
+
+        let allUsers: any[] = [];
+
+        if (Array.isArray(data)) {
+          allUsers = data;
+        } else {
+          allUsers = data.users || [];
+        }
+
+        let filteredUsers = allUsers.filter((m) => {
+          const matchTeam =
+            team === "all" ||
+            (m.team || "").toLowerCase() === team.toLowerCase();
+
+          const matchProject =
+            project === "all" ||
+            (m.project || "").toLowerCase() === project.toLowerCase();
+
+          return matchTeam && matchProject;
+        });
+
+        const startIndex = (page - 1) * limit;
+        const paginatedUsers = filteredUsers.slice(
+          startIndex,
+          startIndex + limit
+        );
+
+        setMembers(paginatedUsers);
+        setTotalUsers(filteredUsers.length);
+        setTotalPages(Math.ceil(filteredUsers.length / limit) || 1);
+
+      } catch (err) {
+        console.error("Error loading team members:", err);
+        setMembers([]);
+        setTotalUsers(0);
+        setTotalPages(1);
+        setPage(1);
+      }
+    }
+
+    loadUsers();
+  }, [period, page, limit, team, project]);
+
+  const startItem = totalUsers === 0 ? 0 : (page - 1) * limit + 1;
+  const endItem = Math.min(page * limit, totalUsers);
 
   return (
-    <div className="bg-white p-6 rounded-xl shadow-sm border mb-8">
-      <h2 className="text-2xl font-bold mb-6">Team Members</h2>
+    <div className="bg-white p-6 rounded-xl shadow-sm border mb-8 font-arimo">
+      <h2 className="text-xl font-semibold text-gray-900 mb-6">Team Members</h2>
 
-      <table className="w-full">
-        <thead>
-          <tr className="text-left text-gray-600 border-b">
-            <th className="pb-3">Team Member</th>
-            <th className="pb-3">Team</th>
-            <th className="pb-3">Project</th>
-            <th className="pb-3">Role</th>
-            <th className="pb-3">Commits</th>
-            <th className="pb-3">PRs</th>
-            <th className="pb-3">Reviews</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {filtered.map((m, index) => (
-            <tr
-              key={index}
-              className="border-b last:border-0 cursor-pointer hover:bg-gray-50 transition"
-              onClick={() => onSelectUser?.(m.name)} 
-            >
-              <td className="py-4 flex items-center gap-3">
-                <UserIcon />
-                <div>
-                  <p className="font-semibold">{m.name}</p>
-                  <p className="text-gray-500 text-sm">{m.email}</p>
-                </div>
-              </td>
-
-              <td>{m.team}</td>
-              <td>{m.project}</td>
-              <td>{m.role}</td>
-
-              <td className="font-semibold text-green-600">
-                {m.commits}
-                <span
-                  className={`ml-1 text-sm ${
-                    m.diffCommits >= 0 ? "text-green-600" : "text-red-500"
-                  }`}
-                >
-                  ({m.diffCommits >= 0 ? "+" : ""}
-                  {m.diffCommits})
-                </span>
-              </td>
-
-              <td className="font-semibold text-blue-600">
-                {m.prs}
-                <span
-                  className={`ml-1 text-sm ${
-                    m.diffPRs >= 0 ? "text-green-600" : "text-red-500"
-                  }`}
-                >
-                  ({m.diffPRs >= 0 ? "+" : ""}
-                  {m.diffPRs})
-                </span>
-              </td>
-
-              <td className="font-semibold text-orange-600">
-                {m.reviews}
-                <span
-                  className={`ml-1 text-sm ${
-                    m.diffReviews >= 0 ? "text-green-600" : "text-red-500"
-                  }`}
-                >
-                  ({m.diffReviews >= 0 ? "+" : ""}
-                  {m.diffReviews})
-                </span>
-              </td>
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="text-left text-gray-600 border-b bg-gray-50">
+              <th className="pb-3 font-semibold">Team Member</th>
+              <th className="pb-3 font-semibold">Team</th>
+              <th className="pb-3 font-semibold">Project</th>
+              <th className="pb-3 font-semibold">Role</th>
+              <th className="pb-3 font-semibold">Commits</th>
+              <th className="pb-3 font-semibold">PRs</th>
+              <th className="pb-3 font-semibold">Reviews</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+
+          <tbody>
+            {members.map((m, index) => (
+              <tr
+                key={index}
+                className="border-b last:border-0 cursor-pointer hover:bg-gray-50 transition"
+                onClick={() => onSelectUser?.(m.login)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onSelectUser?.(m.login);
+                  }
+                }}
+              >
+                <td className="py-4 flex items-center gap-3">
+                  <UserIcon />
+                  <div>
+                    <p className="font-semibold text-gray-900">{m.login}</p>
+                    <p className="text-gray-500 text-sm">{m.email || "—"}</p>
+                  </div>
+                </td>
+
+                <td className="text-gray-700">{m.team || "—"}</td>
+                <td className="text-gray-700">{m.project || "—"}</td>
+                <td className="text-gray-700">{m.role || "—"}</td>
+
+                <td className="text-center">
+                  <div
+                    className="font-semibold"
+                    style={{ color: getDiffColor(m.diffCommits) }}
+                  >
+                    {m.commits}
+                  </div>
+                  <div
+                    className="text-sm"
+                    style={{ color: getDiffColor(m.diffCommits) }}
+                  >
+                    ({m.diffCommits > 0 ? "+" : ""}
+                    {m.diffCommits})
+                  </div>
+                </td>
+
+                <td className="text-center">
+                  <div
+                    className="font-semibold"
+                    style={{ color: getDiffColor(m.diffPRs) }}
+                  >
+                    {m.prs}
+                  </div>
+                  <div
+                    className="text-sm"
+                    style={{ color: getDiffColor(m.diffPRs) }}
+                  >
+                    ({m.diffPRs > 0 ? "+" : ""}
+                    {m.diffPRs})
+                  </div>
+                </td>
+
+                <td className="text-center">
+                  <div
+                    className="font-semibold"
+                    style={{ color: getDiffColor(m.diffReviews) }}
+                  >
+                    {m.reviews}
+                  </div>
+                  <div
+                    className="text-sm"
+                    style={{ color: getDiffColor(m.diffReviews) }}
+                  >
+                    ({m.diffReviews > 0 ? "+" : ""}
+                    {m.diffReviews})
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="flex items-center justify-between mt-6 text-sm text-gray-600">
+        <div className="flex items-center gap-2">
+          <span>Items per page</span>
+
+          <select
+            value={limit}
+            onChange={(e) => {
+              setLimit(Number(e.target.value));
+              setPage(1);
+            }}
+            className="border rounded px-2 py-1"
+          >
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+          </select>
+        </div>
+
+        <div>
+          {startItem}–{endItem} of {totalUsers} items
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button disabled={page === 1} onClick={() => setPage(1)} className="disabled:opacity-30">
+            ⏮
+          </button>
+
+          <button disabled={page === 1} onClick={() => setPage((prev) => prev - 1)} className="disabled:opacity-30">
+            ◀ Previous
+          </button>
+
+          <span className="border px-3 py-1 rounded">{page}</span>
+
+          <span>of {totalPages}</span>
+
+          <button disabled={page === totalPages} onClick={() => setPage((prev) => prev + 1)} className="disabled:opacity-30">
+            Next ▶
+          </button>
+
+          <button disabled={page === totalPages} onClick={() => setPage(totalPages)} className="disabled:opacity-30">
+            ⏭
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

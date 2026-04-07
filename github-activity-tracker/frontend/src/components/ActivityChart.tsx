@@ -11,7 +11,6 @@ import { Bar } from "react-chartjs-2";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
-
 const dottedGridPlugin = {
   id: "dottedGrid",
   afterDraw(chart: any) {
@@ -24,7 +23,6 @@ const dottedGridPlugin = {
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
 
-    
     yScale.ticks.forEach((tick: any) => {
       const y = yScale.getPixelForValue(tick.value);
       ctx.beginPath();
@@ -33,7 +31,6 @@ const dottedGridPlugin = {
       ctx.stroke();
     });
 
-    
     xScale.ticks.forEach((tick: any) => {
       const x = xScale.getPixelForValue(tick.value);
       ctx.beginPath();
@@ -46,12 +43,10 @@ const dottedGridPlugin = {
   },
 };
 
-
 const columnHoverPlugin = {
   id: "columnHover",
   afterDraw(chart: any) {
     const { ctx, tooltip, chartArea, scales } = chart;
-
     if (!tooltip?._active?.length) return;
 
     const active = tooltip._active[0];
@@ -60,10 +55,12 @@ const columnHoverPlugin = {
     const xScale = scales.x;
     if (!xScale) return;
 
+    // ✅ Fix 1: single data point guard
+    if (xScale.ticks.length < 2) return;
+
     const currentX = xScale.getPixelForTick(index);
 
     let categoryWidth;
-
     if (index === xScale.ticks.length - 1) {
       const prevX = xScale.getPixelForTick(index - 1);
       categoryWidth = currentX - prevX;
@@ -81,61 +78,89 @@ const columnHoverPlugin = {
       highlightLeft,
       chartArea.top,
       highlightWidth,
-      chartArea.bottom - chartArea.top
+      chartArea.bottom - chartArea.top,
     );
     ctx.restore();
   },
 };
 
 interface ActivityChartProps {
-  activities: any[];
+  data?: {
+    labels: string[];
+    commits: number[];
+    prs: number[];
+    reviews: number[];
+  };
   period: "daily" | "weekly" | "monthly";
+  showTitle?: boolean;
 }
 
-const ActivityChart: React.FC<ActivityChartProps> = ({ period }) => {
+const ActivityChart: React.FC<ActivityChartProps> = ({
+  data,
+  period,
+  showTitle = true,
+}) => {
+  let labels = data?.labels ?? [];
+  let commits = data?.commits ?? [];
+  let pullRequests = data?.prs ?? [];
+  let reviews = data?.reviews ?? [];
 
-  const labels =
-    period === "weekly"
-      ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-      : [];
+  // ✅ Fix 2: prevent double aggregation
+  const isPreAggregatedWeekly =
+    labels.length > 0 && labels.every((l) => /^Week\s+\d+$/i.test(l));
 
-  
-  const COLOR_COMMITS = "#3994ff";
-  const COLOR_PULLS = "#44be84";
-  const COLOR_REVIEWS = "#fea63e";
+  if (period === "monthly" && labels.length > 0 && !isPreAggregatedWeekly) {
+    const weekLabels: string[] = [];
+    const weekCommits: number[] = [];
+    const weekPRs: number[] = [];
+    const weekReviews: number[] = [];
 
-  const commits = [8, 18, 18, 3, 14, 18, 6];
-  const pullRequests = [0, 5, 1, 2, 5, 6, 1];
-  const reviews = [2, 15, 5, 8, 5, 0, 2];
+    for (let i = 0; i < labels.length; i += 7) {
+      const weekIndex = Math.floor(i / 7) + 1;
 
-  const data = {
+      weekLabels.push(`Week ${weekIndex}`);
+
+      weekCommits.push(
+        commits.slice(i, i + 7).reduce((a, b) => a + b, 0),
+      );
+
+      weekPRs.push(
+        pullRequests.slice(i, i + 7).reduce((a, b) => a + b, 0),
+      );
+
+      weekReviews.push(
+        reviews.slice(i, i + 7).reduce((a, b) => a + b, 0),
+      );
+    }
+
+    labels = weekLabels;
+    commits = weekCommits;
+    pullRequests = weekPRs;
+    reviews = weekReviews;
+  }
+
+  const COLOR_COMMITS = "#3B82F6";
+  const COLOR_PULLS = "#10B981";
+  const COLOR_REVIEWS = "#F59E0B";
+
+  const chartData = {
     labels,
     datasets: [
-      {
-        label: "Commits",
-        data: commits,
-        backgroundColor: COLOR_COMMITS,
-      },
+      { label: "Commits", data: commits, backgroundColor: COLOR_COMMITS },
       {
         label: "Pull Requests",
         data: pullRequests,
         backgroundColor: COLOR_PULLS,
       },
-      {
-        label: "Reviews",
-        data: reviews,
-        backgroundColor: COLOR_REVIEWS,
-      },
+      { label: "Reviews", data: reviews, backgroundColor: COLOR_REVIEWS },
     ],
   };
 
   const options = {
     responsive: true,
     maintainAspectRatio: false,
-
     plugins: {
       legend: { position: "bottom" },
-
       tooltip: {
         mode: "index",
         intersect: false,
@@ -144,14 +169,11 @@ const ActivityChart: React.FC<ActivityChartProps> = ({ period }) => {
         borderWidth: 1,
         cornerRadius: 8,
         padding: 14,
-
         titleColor: "#111",
         titleFont: { size: 18, weight: "600" },
         titleMarginBottom: 12,
-
         displayColors: false,
         bodyFont: { size: 16 },
-
         callbacks: {
           label: function (context: any) {
             const label = context.dataset.label;
@@ -163,30 +185,21 @@ const ActivityChart: React.FC<ActivityChartProps> = ({ period }) => {
 
             return `${label} : ${value}`;
           },
-
-          
           labelTextColor: function (context: any) {
             const label = context.dataset.label;
-
             if (label === "Commits") return COLOR_COMMITS;
             if (label === "Pull Requests") return COLOR_PULLS;
             if (label === "Reviews") return COLOR_REVIEWS;
-
             return "#111";
           },
         },
       },
     },
-
     hover: { mode: "index", intersect: false },
-
     scales: {
-      x: {
-        grid: { display: false },
-      },
+      x: { grid: { display: false } },
       y: {
         beginAtZero: true,
-        suggestedMax: 20,
         ticks: { stepSize: 5 },
         grid: { display: false },
       },
@@ -194,10 +207,17 @@ const ActivityChart: React.FC<ActivityChartProps> = ({ period }) => {
   };
 
   return (
-    <div className="bg-white p-6 rounded-xl shadow-sm">
+    <div className="bg-white p-6 rounded-xl shadow-sm font-arimo">
+      {showTitle && (
+        <h2 className="text-gray-800 text-[18px] mb-4">
+          Activity Overview –{" "}
+          {period.charAt(0).toUpperCase() + period.slice(1)}
+        </h2>
+      )}
+
       <div className="w-full h-[380px]">
         <Bar
-          data={data}
+          data={chartData}
           options={options}
           plugins={[columnHoverPlugin, dottedGridPlugin]}
         />
